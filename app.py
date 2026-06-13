@@ -16,6 +16,7 @@ OANDA_ACCOUNT_ID = os.environ.get("OANDA_ACCOUNT_ID")
 OANDA_ENV = os.environ.get("OANDA_ENVIRONMENT", "practice")
 ENABLE_EXECUTION = os.environ.get("ENABLE_EXECUTION", "false").lower() == "true"
 EXEC_MODE = os.environ.get("EXECUTION_MODE", "practice")
+INTERVAL_MINS = int(os.environ.get("ANALYSIS_INTERVAL_MINS", "15"))
 
 def run_analysis_cycle():
     """Scheduled task to run analysis, execution and notifications."""
@@ -48,12 +49,10 @@ def run_analysis_cycle():
     except Exception as e:
         error_msg = f"Cycle Error: {str(e)}"
         print(error_msg)
-        # Optionally notify user of errors
-        # send_telegram_message(f"⚠️ <b>System Error:</b> {error_msg}")
 
-# Scheduler setup (Every 15 minutes)
+# Scheduler setup
 scheduler = BackgroundScheduler()
-scheduler.add_job(func=run_analysis_cycle, trigger="interval", minutes=15)
+scheduler.add_job(func=run_analysis_cycle, trigger="interval", minutes=INTERVAL_MINS)
 scheduler.start()
 
 @app.route('/')
@@ -67,7 +66,7 @@ def home():
         
         output = io.StringIO()
         output.write("═══════════════════════════════════════\n")
-        output.write(f"SILVER DECK v2.5 (OANDA {OANDA_ENV.upper()})\n")
+        output.write(f"SILVER DECK v3.0 (OANDA {OANDA_ENV.upper()})\n")
         output.write("═══════════════════════════════════════\n")
         output.write(f"ACTION: {signal.action}\n")
         output.write(f"MARKET: {signal.market} (XAG/USD)\n")
@@ -76,7 +75,7 @@ def home():
         output.write("SYSTEM STATUS\n")
         output.write(f"- Mode: {EXEC_MODE.upper()}\n")
         output.write(f"- Execution: {'ENABLED' if ENABLE_EXECUTION else 'DISABLED (Simulation)'}\n")
-        output.write(f"- Scheduler: Active (15m window)\n\n")
+        output.write(f"- Scheduler: Active ({INTERVAL_MINS}m window)\n\n")
         
         output.write("SCORECARD\n")
         for step, (score, reason) in signal.scores.items():
@@ -84,7 +83,7 @@ def home():
         
         output.write("\nENTRY PLAN (If Active)\n")
         output.write(f"- Entry: {signal.entry:.3f}\n")
-        output.write(f"- Stop: {signal.stop:.3f}\n")
+        output.write(f"- Stop: {signal.stop:.3f} (Trailing Dist: {abs(signal.entry-signal.stop):.3f})\n")
         output.write(f"- Target: {signal.targets[0]:.3f}\n")
         
         return Response(output.getvalue(), mimetype='text/plain')
