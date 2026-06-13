@@ -19,3 +19,4 @@ python3 -m silver_deck.cli
 ## Disclaimer
 
 This is not financial advice. Never recommend real-money trading. For educational purposes only.
+# Trigger
