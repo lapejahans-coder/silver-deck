@@ -2,3 +2,8 @@ yfinance
 pandas
 numpy
 pytz
+flask
+gunicorn
+oandapyV20
+apscheduler
+requests
