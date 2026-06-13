@@ -25,7 +25,7 @@ def run_analysis_cycle():
         return
 
     try:
-        print(f"Starting analysis cycle... (Mode: {EXEC_MODE}, Execution: {ENABLE_EXECUTION})")
+        print(f"--- HEARTBEAT: Starting analysis cycle ({EXEC_MODE.upper()}) ---")
         data = get_oanda_market_data(OANDA_API_KEY, OANDA_ACCOUNT_ID)
         signal = generate_signal(data)
         
@@ -42,9 +42,9 @@ def run_analysis_cycle():
             msg += f"- Result: {exec_result}"
                 
             send_telegram_message(msg)
-            print(f"Signal {signal.action} processed. Notification sent.")
+            print(f"--- Signal {signal.action} processed. Notification sent. ---")
         else:
-            print(f"Cycle result: WAIT. No notification sent.")
+            print(f"--- Cycle result: WAIT. No tradeable setup found. ---")
             
     except Exception as e:
         error_msg = f"Cycle Error: {str(e)}"
@@ -54,6 +54,23 @@ def run_analysis_cycle():
 scheduler = BackgroundScheduler()
 scheduler.add_job(func=run_analysis_cycle, trigger="interval", minutes=INTERVAL_MINS)
 scheduler.start()
+
+# Startup Notification
+def notify_startup():
+    print("System starting up...")
+    status_msg = (
+        "🚀 <b>SILVER DECK v3.1 ONLINE</b>\n\n"
+        f"<b>Mode:</b> {EXEC_MODE.upper()}\n"
+        f"<b>Execution:</b> {'ENABLED' if ENABLE_EXECUTION else 'DISABLED'}\n"
+        f"<b>Interval:</b> {INTERVAL_MINS} minutes\n\n"
+        "<i>System is now monitoring OANDA for XAG/USD setups.</i>"
+    )
+    send_telegram_message(status_msg)
+
+# Use a standard startup flag to prevent double execution in some environments
+if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
+    with app.app_context():
+        notify_startup()
 
 @app.route('/')
 def home():
@@ -66,7 +83,7 @@ def home():
         
         output = io.StringIO()
         output.write("═══════════════════════════════════════\n")
-        output.write(f"SILVER DECK v3.0 (OANDA {OANDA_ENV.upper()})\n")
+        output.write(f"SILVER DECK v3.1 (OANDA {OANDA_ENV.upper()})\n")
         output.write("═══════════════════════════════════════\n")
         output.write(f"ACTION: {signal.action}\n")
         output.write(f"MARKET: {signal.market} (XAG/USD)\n")
