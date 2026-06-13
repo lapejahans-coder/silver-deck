@@ -1,6 +1,7 @@
 import os
 import io
 import oandapyV20
+import requests
 from flask import Flask, Response, request
 from apscheduler.schedulers.background import BackgroundScheduler
 from silver_deck.data_oanda import get_oanda_market_data
@@ -17,6 +18,16 @@ OANDA_ENV = os.environ.get("OANDA_ENVIRONMENT", "practice")
 ENABLE_EXECUTION = os.environ.get("ENABLE_EXECUTION", "false").lower() == "true"
 EXEC_MODE = os.environ.get("EXECUTION_MODE", "practice")
 INTERVAL_MINS = int(os.environ.get("ANALYSIS_INTERVAL_MINS", "15"))
+APP_URL = os.environ.get("RENDER_EXTERNAL_URL", "https://silver-deck-v3-fixed.onrender.com")
+
+def self_ping():
+    """Self-ping logic to keep the Render service awake."""
+    try:
+        print(f"Self-ping: Pinging {APP_URL}...")
+        response = requests.get(APP_URL, timeout=10)
+        print(f"Self-ping: Status Code {response.status_code}")
+    except Exception as e:
+        print(f"Self-ping failed: {e}")
 
 def run_analysis_cycle():
     """Scheduled task to run analysis, execution and notifications."""
@@ -26,7 +37,11 @@ def run_analysis_cycle():
 
     try:
         print(f"--- HEARTBEAT: Starting analysis cycle ({EXEC_MODE.upper()}) ---")
+        
+        # Test OANDA connectivity
         data = get_oanda_market_data(OANDA_API_KEY, OANDA_ACCOUNT_ID)
+        print("--- CONNECTIVITY: OANDA & yfinance Data Fetched Successfully ---")
+        
         signal = generate_signal(data)
         
         if signal.action != "WAIT":
@@ -52,25 +67,42 @@ def run_analysis_cycle():
 
 # Scheduler setup
 scheduler = BackgroundScheduler()
+# Analysis cycle every 15 mins
 scheduler.add_job(func=run_analysis_cycle, trigger="interval", minutes=INTERVAL_MINS)
+# Self-ping every 10 mins to prevent sleep
+scheduler.add_job(func=self_ping, trigger="interval", minutes=10)
 scheduler.start()
 
 # Startup Notification
 def notify_startup():
     print("System starting up...")
+    
+    # Verify OANDA connectivity on startup
+    oanda_status = "PENDING"
+    try:
+        if OANDA_API_KEY and OANDA_ACCOUNT_ID:
+            get_oanda_market_data(OANDA_API_KEY, OANDA_ACCOUNT_ID)
+            oanda_status = "CONNECTED ✅"
+        else:
+            oanda_status = "MISSING CREDENTIALS ❌"
+    except Exception as e:
+        oanda_status = f"AUTH ERROR ⚠️ ({str(e)})"
+
     status_msg = (
-        "🚀 <b>SILVER DECK v3.1 ONLINE</b>\n\n"
+        "🚀 <b>SILVER DECK v3.2 ONLINE</b>\n\n"
+        f"<b>OANDA Status:</b> {oanda_status}\n"
         f"<b>Mode:</b> {EXEC_MODE.upper()}\n"
         f"<b>Execution:</b> {'ENABLED' if ENABLE_EXECUTION else 'DISABLED'}\n"
         f"<b>Interval:</b> {INTERVAL_MINS} minutes\n\n"
-        "<i>System is now monitoring OANDA for XAG/USD setups.</i>"
+        "<i>System is now monitoring XAG/USD and self-pinging to stay awake.</i>"
     )
     send_telegram_message(status_msg)
 
-# Use a standard startup flag to prevent double execution in some environments
 if not app.debug or os.environ.get('WERKZEUG_RUN_MAIN') == 'true':
-    with app.app_context():
-        notify_startup()
+    # Small delay to ensure server is ready
+    import time
+    time.sleep(2)
+    notify_startup()
 
 @app.route('/')
 def home():
@@ -83,25 +115,21 @@ def home():
         
         output = io.StringIO()
         output.write("═══════════════════════════════════════\n")
-        output.write(f"SILVER DECK v3.1 (OANDA {OANDA_ENV.upper()})\n")
+        output.write(f"SILVER DECK v3.2 (OANDA {OANDA_ENV.upper()})\n")
         output.write("═══════════════════════════════════════\n")
         output.write(f"ACTION: {signal.action}\n")
         output.write(f"MARKET: {signal.market} (XAG/USD)\n")
         output.write(f"PRICE: {signal.price:.3f}\n\n")
         
         output.write("SYSTEM STATUS\n")
+        output.write(f"- Connectivity: OANDA & yfinance Active ✅\n")
         output.write(f"- Mode: {EXEC_MODE.upper()}\n")
         output.write(f"- Execution: {'ENABLED' if ENABLE_EXECUTION else 'DISABLED (Simulation)'}\n")
-        output.write(f"- Scheduler: Active ({INTERVAL_MINS}m window)\n\n")
+        output.write(f"- Self-Ping: Active (Keep-Awake Enabled)\n\n")
         
         output.write("SCORECARD\n")
         for step, (score, reason) in signal.scores.items():
             output.write(f"- {step}: {score} — {reason}\n")
-        
-        output.write("\nENTRY PLAN (If Active)\n")
-        output.write(f"- Entry: {signal.entry:.3f}\n")
-        output.write(f"- Stop: {signal.stop:.3f} (Trailing Dist: {abs(signal.entry-signal.stop):.3f})\n")
-        output.write(f"- Target: {signal.targets[0]:.3f}\n")
         
         return Response(output.getvalue(), mimetype='text/plain')
     except Exception as e:
