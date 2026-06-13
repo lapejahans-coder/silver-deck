@@ -8,10 +8,15 @@ def execute_oanda_trade(client, account_id: str, signal: Signal):
     execution_mode = os.environ.get("EXECUTION_MODE", "practice").lower()
     units_size = int(os.environ.get("OANDA_UNITS", "100"))
     
-    print(f"Execution Engine: ENABLE_EXECUTION={enable_execution}, MODE={execution_mode}, UNITS={units_size}")
+    # Smart Trailing Logic: Trailing distance is derived from ATR (2.5x ATR)
+    # signal.stop was calculated as entry +/- 2x ATR. 
+    # We'll use the difference between entry and stop as our initial trailing distance.
+    trailing_distance = abs(signal.entry - signal.stop)
+    
+    print(f"Execution Engine: ENABLE_EXECUTION={enable_execution}, MODE={execution_mode}, UNITS={units_size}, TRAILING_DIST={trailing_distance:.3f}")
     
     if not enable_execution:
-        return f"SIMULATION: {signal.action} signal detected. Execution is DISABLED."
+        return f"SIMULATION: {signal.action} @ {signal.entry:.3f}. Trailing SL Dist: {trailing_distance:.3f}."
 
     if signal.action == "WAIT":
         return "No action taken (WAIT signal)."
@@ -23,22 +28,20 @@ def execute_oanda_trade(client, account_id: str, signal: Signal):
     if signal.action == "SHORT":
         units = -units
 
-    # Use 3 decimal places for XAG_USD prices
-    tp_price = f"{signal.targets[0]:.3f}"
-    sl_price = f"{signal.stop:.3f}"
-
-    mo = MarketOrderRequest(
+    # Build Market Order with Trailing Stop
+    mo_data = MarketOrderRequest(
         instrument="XAG_USD",
         units=units,
-        takeProfitOnFill={"price": tp_price},
-        stopLossOnFill={"price": sl_price}
+        takeProfitOnFill={"price": f"{signal.targets[0]:.3f}"},
+        # We replace fixed stopLoss with trailingStopLoss for 'Smart Stop' logic
+        trailingStopLossOnFill={"distance": f"{trailing_distance:.3f}"}
     )
 
-    r = orders.OrderCreate(accountID=account_id, data=mo.data)
+    r = orders.OrderCreate(accountID=account_id, data=mo_data.data)
     try:
         client.request(r)
         fill = r.response.get('orderFillTransaction')
         order_id = fill.get('id') if fill else "N/A"
-        return f"SUCCESS: {signal.action} {units} units of XAG_USD in {execution_mode.upper()} mode. Order ID: {order_id}"
+        return f"SUCCESS: {signal.action} {units} units. Trailing SL active ({trailing_distance:.3f}). Order ID: {order_id}"
     except Exception as e:
-        return f"FAILURE: OANDA API error in {execution_mode} mode: {str(e)}"
+        return f"FAILURE: OANDA API error: {str(e)}"
