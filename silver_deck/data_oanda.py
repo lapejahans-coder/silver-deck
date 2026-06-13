@@ -1,7 +1,9 @@
 import oandapyV20
 import oandapyV20.endpoints.instruments as instruments
+import oandapyV20.endpoints.accounts as accounts
 import pandas as pd
 import yfinance as yf
+import time
 from typing import Dict, Any, Optional
 
 class OandaData:
@@ -9,30 +11,51 @@ class OandaData:
         self.client = oandapyV20.API(access_token=api_key, environment=environment)
         self.account_id = account_id
 
-    def fetch_candles(self, instrument: str, count: int = 100, granularity: str = "M15") -> pd.DataFrame:
+    def check_connection(self) -> bool:
+        """Performs a minimal request to verify API credentials and connectivity."""
+        try:
+            r = accounts.AccountSummary(self.account_id)
+            self.client.request(r)
+            return True
+        except:
+            return False
+
+    def fetch_candles(self, instrument: str, count: int = 100, granularity: str = "M15", retries: int = 3) -> pd.DataFrame:
         params = {
             "count": count,
             "granularity": granularity
         }
         r = instruments.InstrumentsCandles(instrument=instrument, params=params)
-        self.client.request(r)
         
-        candles = []
-        for candle in r.response.get('candles'):
-            if candle.get('complete'):
-                candles.append({
-                    'Time': candle.get('time'),
-                    'Open': float(candle['mid']['o']),
-                    'High': float(candle['mid']['h']),
-                    'Low': float(candle['mid']['l']),
-                    'Close': float(candle['mid']['c']),
-                    'Volume': int(candle['volume'])
-                })
-        
-        df = pd.DataFrame(candles)
-        df['Time'] = pd.to_datetime(df['Time'])
-        df.set_index('Time', inplace=True)
-        return df
+        for attempt in range(retries):
+            try:
+                self.client.request(r)
+                
+                candles = []
+                for candle in r.response.get('candles'):
+                    if candle.get('complete'):
+                        candles.append({
+                            'Time': candle.get('time'),
+                            'Open': float(candle['mid']['o']),
+                            'High': float(candle['mid']['h']),
+                            'Low': float(candle['mid']['l']),
+                            'Close': float(candle['mid']['c']),
+                            'Volume': int(candle['volume'])
+                        })
+                
+                df = pd.DataFrame(candles)
+                if not df.empty:
+                    df['Time'] = pd.to_datetime(df['Time'])
+                    df.set_index('Time', inplace=True)
+                return df
+            except oandapyV20.exceptions.V20Error as e:
+                if ("Rate limited" in str(e) or "Too Many Requests" in str(e)) and attempt < retries - 1:
+                    wait_time = (attempt + 1) * 5
+                    print(f"OANDA Rate Limited. Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+                raise e
+        return pd.DataFrame()
 
 def get_oanda_market_data(api_key: str, account_id: str) -> Dict[str, Any]:
     oanda = OandaData(api_key, account_id)
@@ -43,7 +66,6 @@ def get_oanda_market_data(api_key: str, account_id: str) -> Dict[str, Any]:
     si_1d = oanda.fetch_candles("XAG_USD", granularity="D", count=30)
     
     # Macro analysis (Gold, DXY, Yields) from yfinance
-    # GC=F (Gold), DX-Y.NYB (DXY), ^TNX (10Y Yield)
     gc_1d = yf.Ticker("GC=F").history(period="5d", interval="1d")
     dxy_1d = yf.Ticker("DX-Y.NYB").history(period="5d", interval="1d")
     tnx_1d = yf.Ticker("^TNX").history(period="5d", interval="1d")
