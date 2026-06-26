@@ -11,7 +11,7 @@ def main():
         return
 
     print("═══════════════════════════════════════")
-    print("SILVER FUTURES SIGNAL")
+    print("NASDAQ FUTURES SIGNAL")
     print("═══════════════════════════════════════")
     print(f"ACTION: {signal.action}")
     print(f"MARKET: {signal.market}")
@@ -20,6 +20,20 @@ def main():
     print(f"REGIME: {signal.regime}")
     print(f"SETUP TYPE: {signal.setup}")
     print(f"CONFIDENCE: {signal.confidence}")
+    print("")
+    print("PROP-FIRM RISK PLAN")
+    print(f"- Account Balance: ₦{signal.risk_plan['Account Balance']:,.0f}")
+    print(f"- Max Drawdown: ₦{signal.risk_plan['Max Drawdown']:,.0f}")
+    print(f"- Phase Target: ₦{signal.risk_plan['Phase Target']:,.0f}")
+    print(f"- Normal Risk/Trade: ₦{signal.risk_plan['Normal Risk/Trade']:,.0f}")
+    print(f"- Hard Max Risk/Trade: ₦{signal.risk_plan['Hard Max Risk/Trade']:,.0f}")
+    print(f"- Contract: {signal.risk_plan['Contract']}")
+    print(f"- Stop Distance: {signal.risk_plan['Stop Distance']:.2f} points")
+    if signal.risk_plan["Estimated Risk NGN"] is None and signal.action != "WAIT":
+        print("- Estimated Risk: set USD_NGN_RATE to convert MNQ dollar risk into naira.")
+    elif signal.action != "WAIT":
+        print(f"- Estimated Risk: ₦{signal.risk_plan['Estimated Risk NGN']:,.0f}")
+    print(f"- Daily Stop: ₦{signal.risk_plan['Daily Stop']:,.0f} or 2 consecutive losses")
     print("")
     print("ENTRY PLAN")
     print(f"- Entry: {signal.entry:.2f}")
