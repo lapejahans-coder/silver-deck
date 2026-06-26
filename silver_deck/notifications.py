@@ -24,7 +24,7 @@ def send_telegram_message(message: str):
 
 def format_signal_for_telegram(signal) -> str:
     msg = f"<b>══════════════════════</b>\n"
-    msg += f"<b>SILVER FUTURES SIGNAL</b>\n"
+    msg += f"<b>NASDAQ FUTURES SIGNAL</b>\n"
     msg += f"<b>══════════════════════</b>\n"
     msg += f"<b>ACTION:</b> {signal.action}\n"
     msg += f"<b>MARKET:</b> {signal.market}\n"
@@ -37,6 +37,13 @@ def format_signal_for_telegram(signal) -> str:
     msg += f"- Entry: {signal.entry:.3f}\n"
     msg += f"- Stop: {signal.stop:.3f}\n"
     msg += f"- Target: {signal.targets[0]:.3f}\n\n"
+
+    msg += f"<b>PROP-FIRM RISK</b>\n"
+    msg += f"- Balance: ₦{signal.risk_plan['Account Balance']:,.0f}\n"
+    msg += f"- Max DD: ₦{signal.risk_plan['Max Drawdown']:,.0f}\n"
+    msg += f"- Phase Target: ₦{signal.risk_plan['Phase Target']:,.0f}\n"
+    msg += f"- Normal Risk/Trade: ₦{signal.risk_plan['Normal Risk/Trade']:,.0f}\n"
+    msg += f"- Daily Stop: ₦{signal.risk_plan['Daily Stop']:,.0f} or 2 losses\n\n"
     
     msg += f"<b>REASONING:</b> {signal.scores['Macro Filter'][1]}\n"
     
